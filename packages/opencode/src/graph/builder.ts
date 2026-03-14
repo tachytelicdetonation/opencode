@@ -8,9 +8,9 @@ function makeModuleId(projectDir: string, filePath: string): string {
 
 function makeSubsystemId(projectDir: string, filePath: string): string {
   const rel = relative(projectDir, filePath)
-  const parts = rel.split("/")
-  if (parts.length >= 2) return parts.slice(0, 2).join("/")
-  return parts[0]
+  const dir = dirname(rel)
+  if (dir && dir !== ".") return dir
+  return rel.split("/")[0]
 }
 
 function resolveImportPath(fromFile: string, importSource: string, allFiles: Set<string>): string | undefined {
