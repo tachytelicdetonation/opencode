@@ -247,6 +247,10 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           width: DEFAULT_PANEL_WIDTH,
           tab: "changes" as "changes" | "all",
         },
+        visualizer: {
+          opened: false,
+          width: DEFAULT_PANEL_WIDTH,
+        },
         session: {
           width: DEFAULT_SESSION_WIDTH,
         },
