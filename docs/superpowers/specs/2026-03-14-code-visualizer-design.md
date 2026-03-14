@@ -20,7 +20,7 @@ A real-time code visualization sidebar integrated into the OpenCode Tauri deskto
 
 **Backend (Sidecar Server) — new components:**
 
-1. **Static Analyzer** — parses the codebase using tree-sitter (already bundled in OpenCode). Extracts imports, exports, classes, functions, interfaces, and crucially, JSDoc/docstrings/file-level comment headers as the primary metadata source for graph labels. Clusters files into subsystems by directory structure and import density. Produces a graph JSON (nodes + edges).
+1. **Static Analyzer** — runs in the existing TypeScript Hono server process (sidecar). Parses the codebase using tree-sitter (already bundled in OpenCode). Extracts imports, exports, classes, functions, interfaces, and crucially, JSDoc/docstrings/file-level comment headers as the primary metadata source for graph labels. Clusters files into subsystems by directory structure and import density. Produces a graph JSON (nodes + edges). Exposed as a singleton service `GraphAnalyzer` initialized on first `/graph/*` request.
 
 2. **Graph API** — new Hono routes on the existing server:
    - `GET /graph/architecture` — full graph at the top zoom level
@@ -28,9 +28,7 @@ A real-time code visualization sidebar integrated into the OpenCode Tauri deskto
    - `GET /graph/diff?since=<eventId>` — incremental updates since a known state
    - Graph events pushed via the existing WebSocket sync channel (new `graph` topic)
 
-3. **Comment Enrichment** — LLM-powered comment improvement that writes better comments into the actual source files, not into the graph. Runs in two modes:
-   - **Initial scan:** One-time full codebase review at first activation
-   - **Post-task:** After the AI completes a task, runs `git diff --name-only` against the pre-task state and sends only changed files to the LLM for comment improvement. Token-efficient — never runs during a task, only after.
+3. **Comment Enrichment** (separate subsystem, can be built independently) — LLM-powered comment improvement that writes better comments into the actual source files, not into the graph. The visualizer works without this — it uses whatever comments already exist. Enrichment is an enhancement layer. See [Comment Enrichment section](#comment-enrichment--llm-integration) for details.
 
 **Frontend (Tauri Webview) — new components:**
 
@@ -42,15 +40,15 @@ A real-time code visualization sidebar integrated into the OpenCode Tauri deskto
 
 **Modifications to existing code:**
 
-7. **Tool Pipeline** — small hook added to write/edit/bash tool handlers to emit `file-changed` events, triggering the static analyzer to re-parse affected files.
+7. **Tool Pipeline Hook** — after each write/edit/bash tool completes, the tool handler calls `GraphAnalyzer.onFilesChanged(paths: string[])` on the static analyzer singleton. This is a direct function call within the same server process (not an event bus). The static analyzer maintains a debounce timer internally — multiple calls within 100ms are batched. For `write`/`edit` tools, the changed file paths are known directly from the tool arguments. For `bash`, the analyzer compares mtimes of a watchlist (files in the project's `src/`-equivalent directories, populated during initial scan) before and after execution.
 
 ### Two Update Loops
 
 **Real-time loop (after each tool call):**
 ```
 Tool executes (write/edit/bash)
-  → Tool pipeline emits { type: "file-changed", paths: string[] }
-  → Static analyzer re-parses ONLY affected files (debounced 100ms)
+  → Tool handler calls GraphAnalyzer.onFilesChanged(paths) directly
+  → Static analyzer re-parses ONLY affected files (debounced 100ms internally)
   → Produces graph diff: { added, modified, removed, edgesChanged }
   → Diff pushed via existing WebSocket to frontend
   → SolidJS store reconciles diff reactively
@@ -61,7 +59,12 @@ During this loop, graph labels come from whatever comments already exist in the 
 
 **Post-task enrichment loop (after task completes):**
 ```
-AI session reaches terminal state (task done / user sends next message / 10s idle)
+AI session reaches terminal state (enrichment trigger):
+  - Session status transitions to "completed" or "error" (via existing SessionStatus), OR
+  - User sends a new message (detected by message count change on the session)
+  Note: Pure text responses (no tool calls) do NOT trigger enrichment — only sessions
+  where at least one file-mutating tool (write/edit) was called are eligible. The trigger
+  fires once per "task cycle" (from user message to next user message or completion).
   → git diff --name-only against pre-task state
   → Only changed files sent to LLM with comment-writing prompt
   → LLM writes/updates comments IN the source files
@@ -75,7 +78,7 @@ AI session reaches terminal state (task done / user sends next message / 10s idl
 |---|---|---|
 | `write` | Yes | File content changed |
 | `edit` | Yes | File content changed |
-| `bash` | Yes (conditional) | Check if project files changed via mtime |
+| `bash` | Yes (conditional) | Compare mtimes of watchlist files before and after execution. Watchlist = all files parsed during initial scan (respects `.gitignore` patterns, excludes `node_modules`, `.git`, `dist`, `build`). Watchlist is rebuilt on each full re-scan. |
 | `read`, `grep`, `glob`, `ls` | No | Read-only |
 | `webfetch`, `websearch` | No | External, no file changes |
 
@@ -121,17 +124,31 @@ type GraphEdge = {
 ### GraphState (Frontend Store)
 
 ```typescript
+type Position = { x: number; y: number; width: number; height: number }
+
+type Annotation = {
+  id: string
+  nodeId: string                // attached to this node
+  text: string                  // user's annotation text
+  position: { x: number; y: number }  // offset from node
+}
+
 type GraphState = {
-  nodes: Map<string, GraphNode>
+  nodes: Record<string, GraphNode>  // plain object for SolidJS reactivity
   edges: GraphEdge[]
   zoomLevel: 1 | 2 | 3 | 4
   focusedNode?: string          // current drill-down target
   navigationStack: string[]     // breadcrumb history
   userAnnotations: Annotation[]
   pendingEdits: VisualEdit[]    // edits queued for chat submission
-  layoutCache: Map<string, Position>
+  layoutCache: Record<string, Position>  // plain object for SolidJS reactivity
+  layoutComputing: boolean               // true while Elkjs worker is running
 }
 ```
+
+**Persistence:** Only `zoomLevel`, `focusedNode`, `userAnnotations`, and panel `opened`/`width` are persisted across sessions. `nodes`, `edges`, `layoutCache`, and `navigationStack` are ephemeral — rebuilt from a fresh scan on app restart to avoid stale data. `layoutComputing` is always ephemeral.
+
+**Layout loading state:** When `layoutComputing` is true, the canvas shows a subtle skeleton/shimmer overlay while Elkjs computes positions in the Web Worker. Existing nodes remain visible at their previous positions; only new/changed nodes show placeholder positions until layout completes.
 
 ### VisualEdit
 
@@ -165,7 +182,7 @@ At Level 1, the analyzer groups files into subsystems by:
 
 ### Panel Placement
 
-Right-side panel, same position as the existing file tree / review panels. Added as an additional panel option alongside those. Follows the existing layout store pattern.
+Right-side panel. Like the existing `fileTree`, `review`, and `terminal` entries in the layout store, the visualizer gets its own independent `visualizer` entry with separate `opened`/`width` state. Multiple panels can be open simultaneously — the visualizer can coexist with the file tree or review panel. On narrow screens (<1200px), opening the visualizer auto-closes the file tree panel to preserve chat space (same pattern as the existing sidebar auto-hide behavior).
 
 ### Layout Store Addition
 
@@ -224,7 +241,7 @@ Uses the existing `ResizeHandle` component from `@opencode-ai/ui/resize-handle`.
 |---|---|
 | `Cmd+Shift+V` | Toggle visualizer panel |
 | `Escape` | Zoom out one level / exit edit mode |
-| `Cmd+F` (panel focused) | Search nodes |
+| `/` (panel focused) | Search nodes (avoids conflict with browser find-in-page) |
 
 ## Interaction Model
 
@@ -299,10 +316,21 @@ The enrichment LLM call uses a dedicated system prompt focused on writing concis
 - Writes JSDoc/docstrings, file-level headers, and inline comments where missing or unclear
 - Never removes existing comments — only adds or improves
 
+### Write Strategy
+
+Enrichment writes comments to a staging area first, not directly to source files:
+1. LLM generates comment improvements for changed files
+2. Changes are written to a git stash-like staging area (applied via `git stash create` to produce a ref without modifying the working tree)
+3. A diff is presented in the chat as a review-able "Enrichment suggestions" message
+4. User can accept all, accept per-file, or dismiss
+5. Accepted changes are applied to the source files
+
+This prevents bad comments from silently entering the codebase and gives users full control.
+
 ### User Control
 
 - Enrichment can be disabled in settings
-- Users can review enrichment changes before they're committed (shown as a diff in the chat)
+- Auto-accept mode available for users who trust the enrichment (opt-in)
 - First-run enrichment on a large codebase shows a progress indicator
 
 ## Error Handling
