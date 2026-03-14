@@ -314,6 +314,12 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
         onSelect: () => layout.fileTree.toggle(),
       }),
       viewCommand({
+        id: "visualizer.toggle",
+        title: "Toggle Code Visualizer",
+        keybind: "mod+shift+v",
+        onSelect: () => layout.visualizer.toggle(),
+      }),
+      viewCommand({
         id: "input.focus",
         title: language.t("command.input.focus"),
         keybind: "ctrl+l",

@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from "@solidjs/router"
 import { SDKProvider } from "@/context/sdk"
 import { SyncProvider, useSync } from "@/context/sync"
 import { LocalProvider } from "@/context/local"
+import { GraphProvider } from "@/context/graph"
 import { useGlobalSDK } from "@/context/global-sdk"
 
 import { DataProvider } from "@opencode-ai/ui/context"
@@ -84,7 +85,9 @@ export default function Layout(props: ParentProps) {
       {(resolved) => (
         <SDKProvider directory={() => resolved}>
           <SyncProvider>
-            <DirectoryDataProvider directory={resolved}>{props.children}</DirectoryDataProvider>
+            <GraphProvider>
+              <DirectoryDataProvider directory={resolved}>{props.children}</DirectoryDataProvider>
+            </GraphProvider>
           </SyncProvider>
         </SDKProvider>
       )}

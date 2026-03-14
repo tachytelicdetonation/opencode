@@ -670,6 +670,38 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           setStore("fileTree", "width", width)
         },
       },
+      visualizer: {
+        opened: createMemo(() => store.visualizer?.opened ?? false),
+        width: createMemo(() => store.visualizer?.width ?? DEFAULT_PANEL_WIDTH),
+        open() {
+          if (!store.visualizer) {
+            setStore("visualizer", { opened: true, width: DEFAULT_PANEL_WIDTH })
+            return
+          }
+          setStore("visualizer", "opened", true)
+        },
+        close() {
+          if (!store.visualizer) {
+            setStore("visualizer", { opened: false, width: DEFAULT_PANEL_WIDTH })
+            return
+          }
+          setStore("visualizer", "opened", false)
+        },
+        toggle() {
+          if (!store.visualizer) {
+            setStore("visualizer", { opened: true, width: DEFAULT_PANEL_WIDTH })
+            return
+          }
+          setStore("visualizer", "opened", (x) => !x)
+        },
+        resize(width: number) {
+          if (!store.visualizer) {
+            setStore("visualizer", { opened: true, width })
+            return
+          }
+          setStore("visualizer", "width", width)
+        },
+      },
       session: {
         width: createMemo(() => store.session?.width ?? DEFAULT_SESSION_WIDTH),
         resize(width: number) {
