@@ -12,6 +12,7 @@ import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { trimDiff } from "./edit"
 import { assertExternalDirectory } from "./external-directory"
+import { getAnalyzer } from "../server/routes/graph"
 
 const MAX_DIAGNOSTICS_PER_FILE = 20
 const MAX_PROJECT_DIAGNOSTICS_FILES = 5
@@ -49,6 +50,7 @@ export const WriteTool = Tool.define("write", {
       file: filepath,
       event: exists ? "change" : "add",
     })
+    getAnalyzer(Instance.directory).onFilesChanged([filepath]).catch(() => {})
     FileTime.read(ctx.sessionID, filepath)
 
     let output = "Wrote file successfully."

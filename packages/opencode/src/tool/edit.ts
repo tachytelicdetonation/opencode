@@ -17,6 +17,7 @@ import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { Snapshot } from "@/snapshot"
 import { assertExternalDirectory } from "./external-directory"
+import { getAnalyzer } from "../server/routes/graph"
 
 const MAX_DIAGNOSTICS_PER_FILE = 20
 
@@ -78,6 +79,7 @@ export const EditTool = Tool.define("edit", {
           file: filePath,
           event: existed ? "change" : "add",
         })
+        getAnalyzer(Instance.directory).onFilesChanged([filePath]).catch(() => {})
         FileTime.read(ctx.sessionID, filePath)
         return
       }
@@ -115,6 +117,7 @@ export const EditTool = Tool.define("edit", {
         file: filePath,
         event: "change",
       })
+      getAnalyzer(Instance.directory).onFilesChanged([filePath]).catch(() => {})
       contentNew = await Filesystem.readText(filePath)
       diff = trimDiff(
         createTwoFilesPatch(filePath, filePath, normalizeLineEndings(contentOld), normalizeLineEndings(contentNew)),
