@@ -251,7 +251,7 @@ export async function scanProjectFiles(
       if (files.length >= maxFiles) return
 
       if (entry.isDirectory()) {
-        if (EXCLUDED_DIRS.has(entry.name) || entry.name.startsWith(".")) continue
+        if (EXCLUDED_DIRS.has(entry.name) || entry.name === ".git") continue
         await walk(join(dir, entry.name))
       } else if (entry.isFile()) {
         const ext = extname(entry.name)
@@ -1307,6 +1307,28 @@ getWatchlist(): string[] {
 }
 ```
 
+And add a test for it in `packages/opencode/src/graph/analyzer.test.ts`:
+
+```typescript
+test("getWatchlist returns parsed file paths", async () => {
+  const tmp4 = join(tmpdir(), "graph-analyzer-watchlist-" + Date.now())
+  mkdirSync(join(tmp4, "src"), { recursive: true })
+  writeFileSync(join(tmp4, "src/a.ts"), `export const a = 1\n`)
+  writeFileSync(join(tmp4, "src/b.ts"), `export const b = 2\n`)
+
+  const analyzer = new GraphAnalyzer(tmp4)
+  await analyzer.initialScan()
+
+  const watchlist = analyzer.getWatchlist()
+  expect(watchlist.length).toBe(2)
+  expect(watchlist.some((f) => f.includes("a.ts"))).toBe(true)
+
+  rmSync(tmp4, { recursive: true, force: true })
+})
+```
+
+Note: when adding imports to tool files (write.ts, edit.ts, bash.ts), check if `Instance` is already imported — only add the import if missing. `getAnalyzer` is always a new import.
+
 - [ ] **Step 4: Verify build passes**
 
 Run: `cd packages/opencode && bun run build`
@@ -1321,7 +1343,9 @@ git commit -m "feat(graph): hook write/edit/bash tools to trigger graph re-parse
 
 ---
 
-### Task 8: WebSocket Graph Events — push diffs to frontend
+### Task 8: SSE Graph Events — push diffs to frontend
+
+**Note:** The spec mentions using the existing WebSocket sync channel. This plan uses a dedicated SSE endpoint instead because: (1) the existing sync system is tightly coupled to session/message data structures, (2) SSE is simpler for one-way server→client streaming, (3) it avoids modifying the complex SyncProvider. The graph data flows through `/graph/subscribe` SSE, not the WebSocket sync channel. The `/graph/diff` GET endpoint (Task 6) is kept as a fallback for clients that miss SSE events.
 
 **Files:**
 - Modify: `packages/opencode/src/server/routes/graph.ts` (add WS diff broadcasting)
@@ -2709,7 +2733,7 @@ import { GraphEditBar } from "./graph-edit-bar"
 export const VisualizerPanel: Component<{
   onSubmitToChat: (prompt: string) => void
 }> = (props) => {
-  const { connect, store } = useGraph()
+  const { connect, store, drillDown } = useGraph()
   const [editMode, setEditMode] = createSignal(false)
 
   onMount(() => {
@@ -2818,12 +2842,15 @@ Verify accessor names match by reading the `useLayout()` return type in `package
 
 - [ ] **Step 4: Implement handleSubmitToChat**
 
-Add to the layout component where the VisualizerPanel is rendered:
+Add to the layout component where the VisualizerPanel is rendered. **Important:** In SolidJS, hooks must be called during component setup, not inside callbacks. Capture SDK and navigate at setup time:
 
 ```typescript
+// At component setup scope (not inside a callback):
+const sdk = useGlobalSDK()
+const navigate = useNavigate()
+const layout = useLayout()
+
 async function handleSubmitToChat(prompt: string) {
-  // Use the SDK to create a new session
-  const sdk = useGlobalSDK()
   const result = await sdk.client.session.create({
     body: {
       title: "Visual edit: " + prompt.slice(0, 50),
@@ -2831,16 +2858,13 @@ async function handleSubmitToChat(prompt: string) {
     },
   })
   if (result.data) {
-    // Navigate to the new session
-    const navigate = useNavigate()
     navigate(`/session/${result.data.id}`)
-    // Set the pending message so it appears in the prompt input
-    setLayout("sessionView", result.data.id, "pendingMessage", prompt)
+    layout.setStore("sessionView", result.data.id, "pendingMessage", prompt)
   }
 }
 ```
 
-This follows the same pattern used in `packages/app/src/pages/layout.tsx` for session creation (search for `Session.create` or `sdk.client.session`).
+This follows the same pattern used in `packages/app/src/pages/layout.tsx` for session creation (search for session creation logic in the file).
 
 - [ ] **Step 5: Verify build passes**
 
