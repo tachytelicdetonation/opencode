@@ -1,7 +1,7 @@
-import ELK from "elkjs/lib/elk-api"
+import ELK from "elkjs/lib/elk.bundled"
 import type { GraphNode, GraphEdge, Position } from "./types"
 
-// Use elk-api (browser-compatible) instead of main entry which requires 'web-worker'
+// elk.bundled includes layout algorithms and works in the browser without web-worker
 const elk = new ELK()
 
 export async function computeLayout(
