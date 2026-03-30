@@ -1,6 +1,6 @@
 export type GraphNode = {
   id: string
-  type: "subsystem" | "module" | "class" | "function"
+  type: "subsystem" | "module" | "class" | "function" | "decision"
   label: string
   description?: string
   filePath: string
@@ -9,6 +9,7 @@ export type GraphNode = {
   parent?: string
   lastModified: number
   changeState?: "added" | "modified" | "deleted"
+  condition?: string
 }
 
 export type GraphEdge = {

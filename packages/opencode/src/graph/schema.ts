@@ -2,7 +2,7 @@ import z from "zod"
 
 export const GraphNode = z.object({
   id: z.string(),
-  type: z.enum(["subsystem", "module", "class", "function"]),
+  type: z.enum(["subsystem", "module", "class", "function", "decision"]),
   label: z.string(),
   description: z.string().optional(),
   filePath: z.string(),
@@ -11,6 +11,7 @@ export const GraphNode = z.object({
   parent: z.string().optional(),
   lastModified: z.number(),
   changeState: z.enum(["added", "modified", "deleted"]).optional(),
+  condition: z.string().optional(),
 })
 export type GraphNode = z.infer<typeof GraphNode>
 

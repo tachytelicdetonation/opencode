@@ -5,8 +5,23 @@ import type { ParsedFile } from "./parser"
 
 describe("buildGraph", () => {
   const projectDir = "/project"
+  const importItem = (source: string, name: string) => ({
+    source,
+    names: [name],
+    items: [{ imported: name, local: name }],
+    typeOnly: false,
+    line: 1,
+  })
+  const fn = (name: string, lineStart: number, lineEnd: number, parentClass?: string) => ({
+    name,
+    description: "",
+    lineStart,
+    lineEnd,
+    parentClass,
+    refs: [],
+  })
 
-  test("creates subsystem nodes from top-level directories", () => {
+  test("creates package roots from directory hierarchy", () => {
     const files = new Map<string, ParsedFile>([
       [
         "/project/packages/app/src/index.ts",
@@ -16,9 +31,9 @@ describe("buildGraph", () => {
         "/project/packages/sdk/src/client.ts",
         {
           filePath: "/project/packages/sdk/src/client.ts",
-          imports: [{ source: "../types", names: ["Client"], typeOnly: false, line: 1 }],
+          imports: [importItem("../types", "Client")],
           classes: [],
-          functions: [{ name: "createClient", description: "", lineStart: 5, lineEnd: 20 }],
+          functions: [fn("createClient", 5, 20)],
           fileComment: "",
         },
       ],
@@ -26,8 +41,9 @@ describe("buildGraph", () => {
 
     const graph = buildGraph(projectDir, files)
 
-    const subsystems = graph.nodes.filter((n) => n.type === "subsystem")
-    expect(subsystems.length).toBeGreaterThanOrEqual(2)
+    const subsystems = graph.nodes.filter((n) => n.type === "subsystem").map((n) => n.id)
+    expect(subsystems).toContain("packages/app")
+    expect(subsystems).toContain("packages/sdk")
 
     const modules = graph.nodes.filter((n) => n.type === "module")
     expect(modules.length).toBe(2)
@@ -39,7 +55,7 @@ describe("buildGraph", () => {
         "/project/src/auth.ts",
         {
           filePath: "/project/src/auth.ts",
-          imports: [{ source: "./database", names: ["Database"], typeOnly: false, line: 1 }],
+          imports: [importItem("./database", "Database")],
           classes: [],
           functions: [],
           fileComment: "",
@@ -73,7 +89,7 @@ describe("buildGraph", () => {
           filePath: "/project/src/service.ts",
           imports: [],
           classes: [{ name: "UserService", description: "Manages users", lineStart: 5, lineEnd: 50 }],
-          functions: [{ name: "createUser", description: "", lineStart: 10, lineEnd: 30, parentClass: "UserService" }],
+          functions: [fn("createUser", 10, 30, "UserService")],
           fileComment: "",
         },
       ],

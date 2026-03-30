@@ -22,3 +22,43 @@
 .graph-node-move {
   transition: transform 0.4s ease-in-out;
 }
+
+/* Node body transitions */
+.graph-node .graph-node-body {
+  transition: fill 0.15s ease, stroke 0.15s ease, stroke-width 0.15s ease;
+}
+
+/* Edge transitions */
+.graph-edge path {
+  transition: stroke 0.2s ease, stroke-width 0.2s ease;
+}
+
+/* Edge label — hidden by default, appears on hover */
+.graph-edge-label {
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+/* When hovering the edge group, show label */
+.graph-edge:hover .graph-edge-label {
+  opacity: 1 !important;
+}
+.graph-edge:hover path {
+  stroke-width: 1.8;
+}
+
+/* Change state glow */
+.graph-node-change-glow {
+  animation: change-glow-pulse 2.5s ease-in-out infinite;
+}
+@keyframes change-glow-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* foreignObject content styling */
+.graph-node-content {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}

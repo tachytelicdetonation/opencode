@@ -1,7 +1,6 @@
 import ELK from "elkjs/lib/elk.bundled"
 import type { GraphNode, GraphEdge, Position } from "./types"
 
-// elk.bundled includes layout algorithms and works in the browser without web-worker
 const elk = new ELK()
 
 export async function computeLayout(
@@ -24,9 +23,17 @@ export async function computeLayout(
     layoutOptions: {
       "elk.algorithm": "layered",
       "elk.direction": "DOWN",
-      "elk.spacing.nodeNode": "40",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "60",
-      "elk.padding": "[top=20,left=20,bottom=20,right=20]",
+      "elk.spacing.nodeNode": "60",
+      "elk.layered.spacing.nodeNodeBetweenLayers": "80",
+      "elk.layered.spacing.edgeEdgeBetweenLayers": "20",
+      "elk.layered.spacing.edgeNodeBetweenLayers": "25",
+      "elk.padding": "[top=40,left=40,bottom=40,right=40]",
+      "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
+      "elk.layered.crossingMinimization.greedySwitch.type": "TWO_SIDED",
+      "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
+      "elk.layered.considerModelOrder.strategy": "PREFER_EDGES",
+      "elk.edgeRouting": "ORTHOGONAL",
+      "elk.layered.mergeEdges": "true",
     },
     children: visibleNodes.map((node) => ({
       id: node.id,
@@ -58,18 +65,21 @@ export async function computeLayout(
 function nodeWidth(node: GraphNode): number {
   const labelLen = node.label.length
   switch (node.type) {
-    case "subsystem": return Math.max(160, labelLen * 9 + 40)
-    case "module": return Math.max(140, labelLen * 8 + 30)
-    case "class": return Math.max(120, labelLen * 8 + 30)
-    case "function": return Math.max(100, labelLen * 7 + 20)
+    case "subsystem": return Math.max(200, labelLen * 8.5 + 50)
+    case "module": return Math.max(180, labelLen * 8 + 44)
+    case "class": return Math.max(170, labelLen * 8 + 44)
+    case "function": return Math.max(120, labelLen * 7 + 24)
+    case "decision": return Math.max(80, labelLen * 6 + 30)
   }
 }
 
 function nodeHeight(node: GraphNode): number {
+  const hasDesc = !!node.description
   switch (node.type) {
-    case "subsystem": return 60
-    case "module": return 50
-    case "class": return 50
-    case "function": return 40
+    case "subsystem": return hasDesc ? 80 : 52
+    case "module": return hasDesc ? 76 : 48
+    case "class": return hasDesc ? 76 : 48
+    case "function": return 38
+    case "decision": return 40
   }
 }

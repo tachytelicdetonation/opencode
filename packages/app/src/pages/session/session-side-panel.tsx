@@ -15,6 +15,7 @@ import FileTree from "@/components/file-tree"
 import { SessionContextUsage } from "@/components/session-context-usage"
 import { DialogSelectFile } from "@/components/dialog-select-file"
 import { SessionContextTab, SortableTab, FileVisual } from "@/components/session"
+import { VisualizerPanel } from "@/components/graph/visualizer-panel"
 import { useCommand } from "@/context/command"
 import { useFile, type SelectedLineRange } from "@/context/file"
 import { useLanguage } from "@/context/language"
@@ -146,7 +147,7 @@ export function SessionSidePanel(props: {
   const fileTreeTab = () => layout.fileTree.tab()
 
   const setFileTreeTabValue = (value: string) => {
-    if (value !== "changes" && value !== "all") return
+    if (value !== "changes" && value !== "all" && value !== "architecture") return
     layout.fileTree.setTab(value)
   }
 
@@ -383,6 +384,9 @@ export function SessionSidePanel(props: {
                   <Tabs.Trigger value="all" class="flex-1" classes={{ button: "w-full" }}>
                     {language.t("session.files.all")}
                   </Tabs.Trigger>
+                  <Tabs.Trigger value="architecture" class="flex-1" classes={{ button: "w-full" }}>
+                    Architecture
+                  </Tabs.Trigger>
                 </Tabs.List>
                 <Tabs.Content value="changes" class="bg-background-stronger px-3 py-0">
                   <Switch>
@@ -428,6 +432,11 @@ export function SessionSidePanel(props: {
                     </Match>
                   </Switch>
                 </Tabs.Content>
+                <Tabs.Content value="architecture" class="bg-background-stronger">
+                  <Show when={fileTreeTab() === "architecture"} fallback={null}>
+                    <VisualizerPanel onSubmitToChat={() => {}} />
+                  </Show>
+                </Tabs.Content>
               </Tabs>
             </div>
             <Show when={fileOpen()}>
@@ -437,7 +446,7 @@ export function SessionSidePanel(props: {
                   edge="start"
                   size={layout.fileTree.width()}
                   min={200}
-                  max={480}
+                  max={900}
                   collapseThreshold={160}
                   onResize={(width) => {
                     props.size.touch()

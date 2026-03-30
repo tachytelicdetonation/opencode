@@ -2,16 +2,16 @@ import { createStore } from "solid-js/store"
 import { onCleanup, batch } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { useSDK } from "../sdk"
-import { useGlobalSDK } from "../global-sdk"
-import { applySnapshot, applyDiff, type GraphStoreState } from "./store"
+import { useServer } from "../server"
+import { applySnapshot, type GraphStoreState } from "./store"
 import { computeLayout } from "./layout"
-import type { GraphSnapshot, GraphDiff, Position, Annotation, VisualEdit } from "./types"
+import type { GraphSnapshot, Position, Annotation, VisualEdit, GraphNode } from "./types"
 
 export const { use: useGraph, provider: GraphProvider } = createSimpleContext({
   name: "Graph",
   init: () => {
     const sdk = useSDK()
-    const globalSDK = useGlobalSDK()
+    const server = useServer()
 
     const [store, setStore] = createStore({
       graph: null as GraphStoreState | null,
@@ -23,30 +23,44 @@ export const { use: useGraph, provider: GraphProvider } = createSimpleContext({
       userAnnotations: [] as Annotation[],
       pendingEdits: [] as VisualEdit[],
       connected: false,
+      connecting: false,
       error: undefined as string | undefined,
+      fitTick: 0,
+      filters: {
+        subsystem: true,
+        module: true,
+        class: true,
+        function: true,
+        decision: true,
+      } as Record<GraphNode["type"], boolean>,
     })
 
     let pollTimer: ReturnType<typeof setInterval> | null = null
 
     async function connect() {
-      // Use the SDK client to fetch the graph via authenticated HTTP
+      if (store.connected || store.connecting) return
+      setStore("connecting", true)
+      if (pollTimer) {
+        clearInterval(pollTimer)
+        pollTimer = null
+      }
+
+      // Use authenticated HTTP polling instead of EventSource
       // (EventSource doesn't support Basic Auth headers)
       try {
-        const client = globalSDK.createClient({
-          directory: sdk.directory,
-          throwOnError: true,
-        })
         const baseUrl = sdk.url.replace(/\/$/, "")
+        const http = server.current?.http
+        const authHeaders: Record<string, string> = {}
+        if (http?.password) {
+          authHeaders["Authorization"] = `Basic ${btoa(`${http.username ?? "opencode"}:${http.password}`)}`
+        }
         const res = await fetch(
           `${baseUrl}/graph/architecture?directory=${encodeURIComponent(sdk.directory)}`,
-          {
-            headers: {
-              ...(client as any)?.options?.headers,
-            },
-          },
+          { headers: authHeaders },
         )
         if (!res.ok) {
           setStore("error", `HTTP ${res.status}`)
+          setStore("connected", false)
           return
         }
         const snapshot: GraphSnapshot = await res.json()
@@ -61,21 +75,28 @@ export const { use: useGraph, provider: GraphProvider } = createSimpleContext({
           try {
             const res = await fetch(
               `${baseUrl}/graph/architecture?directory=${encodeURIComponent(sdk.directory)}`,
+              { headers: authHeaders },
             )
-            if (!res.ok) return
+            if (!res.ok) {
+              setStore("connected", false)
+              return
+            }
             const snapshot: GraphSnapshot = await res.json()
             const newState = applySnapshot(snapshot)
             if (newState.eventId !== store.graph?.eventId) {
               setStore("graph", newState)
               recomputeLayout(newState)
             }
+            setStore("connected", true)
           } catch {
-            // ignore poll errors
+            setStore("connected", false)
           }
         }, 5000)
       } catch (err) {
         setStore("error", String(err))
         setStore("connected", false)
+      } finally {
+        setStore("connecting", false)
       }
     }
 
@@ -122,6 +143,25 @@ export const { use: useGraph, provider: GraphProvider } = createSimpleContext({
       setStore("pendingEdits", [])
     }
 
+    function requestFit() {
+      setStore("fitTick", store.fitTick + 1)
+    }
+
+    function setFilter(type: GraphNode["type"], value: boolean) {
+      setStore("filters", type, value)
+      requestFit()
+    }
+
+    function resetFilters() {
+      batch(() => {
+        setStore("filters", "subsystem", true)
+        setStore("filters", "module", true)
+        setStore("filters", "class", true)
+        setStore("filters", "function", true)
+      })
+      requestFit()
+    }
+
     function compileEditsToPrompt(): string {
       return store.pendingEdits.map((e) => e.compiledPrompt).join("\n")
     }
@@ -130,6 +170,6 @@ export const { use: useGraph, provider: GraphProvider } = createSimpleContext({
       if (pollTimer) clearInterval(pollTimer)
     })
 
-    return { store, connect, drillDown, navigateUp, addEdit, clearEdits, compileEditsToPrompt }
+    return { store, connect, drillDown, navigateUp, addEdit, clearEdits, compileEditsToPrompt, requestFit, setFilter, resetFilters }
   },
 })

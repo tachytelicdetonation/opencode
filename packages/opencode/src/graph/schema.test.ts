@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import { GraphNode, GraphEdge, GraphDiff } from "./schema"
-import z from "zod"
 
 describe("GraphNode", () => {
   test("validates a valid subsystem node", () => {
     const node = {
       id: "packages/app",
-      type: "subsystem",
+      type: "subsystem" as const,
       label: "App Package",
       filePath: "/project/packages/app",
       children: ["packages/app/src/context", "packages/app/src/pages"],
@@ -18,15 +17,15 @@ describe("GraphNode", () => {
   test("validates a function node with optional fields", () => {
     const node = {
       id: "packages/app/src/context/layout.tsx::useLayout",
-      type: "function",
+      type: "function" as const,
       label: "useLayout",
       description: "Provides layout context for panel state management",
       filePath: "/project/packages/app/src/context/layout.tsx",
-      lineRange: [133, 280],
+      lineRange: [133, 280] as [number, number],
       children: [],
       parent: "packages/app/src/context/layout.tsx",
       lastModified: Date.now(),
-      changeState: "modified",
+      changeState: "modified" as const,
     }
     expect(GraphNode.parse(node)).toEqual(node)
   })
@@ -44,7 +43,7 @@ describe("GraphEdge", () => {
       id: "packages/app->packages/sdk",
       source: "packages/app",
       target: "packages/sdk",
-      type: "imports",
+      type: "imports" as const,
     }
     expect(GraphEdge.parse(edge)).toEqual(edge)
   })

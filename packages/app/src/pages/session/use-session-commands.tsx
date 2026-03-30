@@ -315,9 +315,12 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       }),
       viewCommand({
         id: "visualizer.toggle",
-        title: "Toggle Code Visualizer",
-        keybind: "mod+shift+v",
-        onSelect: () => layout.visualizer.toggle(),
+        title: "Toggle Architecture View",
+        keybind: "mod+shift+a",
+        onSelect: () => {
+          if (!layout.fileTree.opened()) layout.fileTree.open()
+          layout.fileTree.setTab(layout.fileTree.tab() === "architecture" ? "all" : "architecture")
+        },
       }),
       viewCommand({
         id: "input.focus",

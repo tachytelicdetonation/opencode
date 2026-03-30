@@ -47,7 +47,6 @@ import { useSessionLayout } from "@/pages/session/session-layout"
 import { syncSessionModel } from "@/pages/session/session-model-helpers"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
-import { VisualizerPanel } from "@/components/graph/visualizer-panel"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
 import { Identifier } from "@/utils/id"
@@ -385,17 +384,12 @@ export default function Page() {
   const size = createSizing()
   const desktopReviewOpen = createMemo(() => isDesktop() && view().reviewPanel.opened())
   const desktopFileTreeOpen = createMemo(() => isDesktop() && layout.fileTree.opened())
-  const desktopVisualizerOpen = createMemo(() => isDesktop() && layout.visualizer.opened())
   const desktopSidePanelOpen = createMemo(() => desktopReviewOpen() || desktopFileTreeOpen())
   const sessionPanelWidth = createMemo(() => {
-    if (!desktopSidePanelOpen() && !desktopVisualizerOpen()) return "100%"
+    if (!desktopSidePanelOpen()) return "100%"
     let width = "100%"
     if (desktopReviewOpen()) width = `${layout.session.width()}px`
     else if (desktopFileTreeOpen()) width = `calc(100% - ${layout.fileTree.width()}px)`
-    if (desktopVisualizerOpen()) {
-      if (width === "100%") width = `calc(100% - ${layout.visualizer.width()}px)`
-      else width = `calc(${width} - ${layout.visualizer.width()}px)`
-    }
     return width
   })
   const centered = createMemo(() => isDesktop() && !desktopReviewOpen())
@@ -1832,32 +1826,6 @@ export default function Page() {
           size={size}
         />
 
-        <Show when={desktopVisualizerOpen()}>
-          <div onPointerDown={() => size.start()}>
-            <ResizeHandle
-              direction="horizontal"
-              edge="start"
-              size={layout.visualizer.width()}
-              min={200}
-              max={600}
-              collapseThreshold={160}
-              onResize={(width) => {
-                size.touch()
-                layout.visualizer.resize(width)
-              }}
-              onCollapse={layout.visualizer.close}
-            />
-          </div>
-          <div
-            style={{
-              width: `${layout.visualizer.width()}px`,
-              "flex-shrink": "0",
-              height: "100%",
-            }}
-          >
-            <VisualizerPanel onSubmitToChat={handleSubmitToChat} />
-          </div>
-        </Show>
       </div>
 
       <TerminalPanel />
