@@ -19,6 +19,7 @@ describe("buildGraph", () => {
     lineEnd,
     parentClass,
     refs: [],
+    branches: [],
   })
 
   test("creates package roots from directory hierarchy", () => {
